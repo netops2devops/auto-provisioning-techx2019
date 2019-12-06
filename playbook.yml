@@ -1,0 +1,61 @@
+---
+- name: PROVISION A DEVICE
+  hosts: neteng_lab
+  connection: local
+  gather_facts: no
+
+  roles:
+    - Juniper.junos
+
+  tasks:
+    - name : LOAD BASE CONFIG (JUNOS)
+      junos_config:
+        src : "../BaseConfig/juniper/JunosBaseConfig.set"
+        comment : "Base config pushed by ansible"
+      tags:
+        - push_baseconfig_junos
+      when: ansible_network_os == 'junos'
+
+
+    - name : LOAD BASE CONFIG (ARISTA)
+      junos_config:
+        src : "../BaseConfig/juniper/AristaBaseConfig.cfg"
+        comment : "Base config pushed by ansible"
+      tags:
+        - push_baseconfig_eos
+      when: ansible_network_os == 'eos'
+
+
+    - name : ADD DEVICE to LIBRENMS MONITORING
+      command : "../librenms_rest/ManageDevices.py add {{ inventory_hostname }}"
+      become: yes
+      become_user: root
+      tags :
+        - librenms
+
+
+    - name : ADD DEVICE to NETDOT DB
+      command : "../netdot_add_remove_dev/netdot_ManageDevice.py add {{ inventory_hostname }}"
+      become: yes
+      become_user: root
+      tags :
+        - netdot
+
+
+    - name : PUSH CODE & INITIATE UPGRADE (if device == juniper)
+      juniper_junos_software:
+        local_package : "../nos/junos/jinstall-host-qfx-5-16.1R4.7-signed.tgz"
+        validate : yes
+      register: response
+      when: ansible_network_os == 'junos'
+    - debug:
+        var: response
+
+
+    - name: PUSH CODE and UPGRADE (if device == arista)
+      eos_command:
+        commands:
+          - 'install source {{ swi_url }} now'
+      when: ansible_network_os == 'eos'
+    - debug:
+        var: response
